@@ -111,17 +111,23 @@ public class MainActivity extends Activity {
     
     private void launchMainApp() {
         try {
-            PackageManager pm = getPackageManager();
-            Intent intent = pm.getLaunchIntentForPackage(MAIN_APP_PACKAGE);
-            
-            if (intent != null) {
+            // Intentar abrir directamente la actividad principal
+            Intent intent = new Intent();
+            intent.setClassName("com.msandroid.mobile", "com.mobile.brasiltv.activity.MainAty");
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+            finish();
+        } catch (Exception e) {
+            // Si falla, intentar con otra actividad conocida
+            try {
+                Intent intent = new Intent();
+                intent.setClassName("com.msandroid.mobile", "com.mobile.brasiltv.activity.WebViewAty");
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 startActivity(intent);
                 finish();
-            } else {
-                Toast.makeText(this, "Error: Componente principal no encontrado. Reinstala la aplicación.", Toast.LENGTH_LONG).show();
+            } catch (Exception e2) {
+                Toast.makeText(this, "Error: Instala primero la app principal (xuper hydra movil v4)", Toast.LENGTH_LONG).show();
             }
-        } catch (Exception e) {
-            Toast.makeText(this, "Error al iniciar: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
     
