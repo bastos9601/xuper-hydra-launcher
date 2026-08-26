@@ -3,7 +3,6 @@ plugins {
 }
 
 android {
-    namespace 'com.xuperhydra.launcher'
     compileSdk 33
 
     defaultConfig {
