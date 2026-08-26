@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xuper Hydra - Login</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .login-container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        
+        .logo {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        p {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        
+        .code-input {
+            width: 100%;
+            padding: 15px;
+            font-size: 24px;
+            text-align: center;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            letter-spacing: 8px;
+            transition: border-color 0.3s;
+        }
+        
+        .code-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .error {
+            color: #e74c3c;
+            margin-top: 15px;
+            font-size: 14px;
+            display: none;
+        }
+        
+        .loading {
+            display: none;
+            margin-top: 15px;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">🔐</div>
+        <h1>Xuper Hydra</h1>
+        <p>Ingresa tu código de acceso</p>
+        
+        <input 
+            type="text" 
+            id="codeInput" 
+            class="code-input" 
+            placeholder="000000" 
+            maxlength="6" 
+            inputmode="numeric"
+            pattern="[0-9]*"
+        />
+        
+        <button id="loginBtn" class="btn">Acceder</button>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+        </div>
+        
+        <div class="error" id="error">Código inválido. Intenta nuevamente.</div>
+    </div>
+
+    <script>
+        const codeInput = document.getElementById('codeInput');
+        const loginBtn = document.getElementById('loginBtn');
+        const loading = document.getElementById('loading');
+        const error = document.getElementById('error');
+        
+        // Generar o recuperar device_id único
+        function getDeviceId() {
+            let deviceId = localStorage.getItem('xuper_device_id');
+            if (!deviceId) {
+                deviceId = 'web_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('xuper_device_id', deviceId);
+            }
+            return deviceId;
+        }
+        
+        // Verificar si ya está logueado al cargar
+        window.addEventListener('load', function() {
+            const isLoggedIn = localStorage.getItem('xuper_logged_in');
+            const expiresAt = localStorage.getItem('xuper_expires_at');
+            
+            // Si está logueado y no ha expirado
+            if (isLoggedIn === 'true' && expiresAt) {
+                const expiryDate = new Date(expiresAt);
+                const now = new Date();
+                
+                if (expiryDate > now) {
+                    // Aún válido, redirigir
+                    redirectToApp();
+                    return;
+                } else {
+                    // Expirado, limpiar
+                    localStorage.removeItem('xuper_logged_in');
+                    localStorage.removeItem('xuper_expires_at');
+                }
+            }
+            
+            // Si no está logueado, mostrar el formulario
+            codeInput.focus();
+        });
+        
+        // Solo permitir números
+        codeInput.addEventListener('input', function(e) {
+            this.value = this.value.replace(/[^0-9]/g, '');
+        });
+        
+        // Login al presionar Enter
+        codeInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && this.value.length === 6) {
+                login();
+            }
+        });
+        
+        loginBtn.addEventListener('click', login);
+        
+        async function login() {
+            const code = codeInput.value.trim();
+            
+            if (code.length !== 6) {
+                showError('El código debe tener 6 dígitos');
+                return;
+            }
+            
+            // Mostrar loading
+            loginBtn.disabled = true;
+            loading.style.display = 'block';
+            error.style.display = 'none';
+            
+            try {
+                const deviceId = getDeviceId();
+                
+                // Crear FormData para application/x-www-form-urlencoded
+                const formData = new URLSearchParams();
+                formData.append('code', code);
+                formData.append('device_id', deviceId);
+                
+                const response = await fetch('https://sxhupinyysffokplogvj.supabase.co/functions/v1/validar-codigo', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData.toString()
+                });
+                
+                const data = await response.json();
+                
+                if (data.ok === true) {
+                    // Guardar información del login
+                    localStorage.setItem('xuper_logged_in', 'true');
+                    localStorage.setItem('xuper_user_code', code);
+                    localStorage.setItem('xuper_expires_at', data.expires_at);
+                    localStorage.setItem('xuper_days_left', data.days_left.toString());
+                    
+                    // Notificar a Android sobre login exitoso
+                    if (window.AndroidInterface && window.AndroidInterface.onLoginSuccess) {
+                        window.AndroidInterface.onLoginSuccess(data.expires_at);
+                    }
+                    
+                    // Guardar notificación si existe
+                    if (data.notif_id && data.notif_id > 0) {
+                        const lastNotifId = localStorage.getItem('xuper_last_notif_id');
+                        if (lastNotifId !== data.notif_id.toString()) {
+                            localStorage.setItem('xuper_last_notif_id', data.notif_id.toString());
+                            localStorage.setItem('xuper_notif_title', data.notif_title || '');
+                            localStorage.setItem('xuper_notif_message', data.notif_message || '');
+                            localStorage.setItem('xuper_notif_unread', 'true');
+                        }
+                    }
+                    
+                    // Mostrar mensaje de éxito con días restantes
+                    document.querySelector('.login-container').innerHTML = `
+                        <div class="logo">✅</div>
+                        <h1 style="color: #27ae60;">¡Acceso Concedido!</h1>
+                        <p>${data.days_left} días restantes</p>
+                        <p style="font-size: 14px; color: #999; margin-top: 10px;">Redirigiendo...</p>
+                    `;
+                    
+                    // Redirigir después de 1.5 segundos
+                    setTimeout(redirectToApp, 1500);
+                    
+                } else {
+                    // Manejar diferentes tipos de errores
+                    let errorMsg = 'Código inválido';
+                    
+                    switch(data.reason) {
+                        case 'not_found':
+                            errorMsg = 'Código no encontrado o inactivo';
+                            break;
+                        case 'expired':
+                            errorMsg = 'Este código ha expirado';
+                            break;
+                        case 'device_limit':
+                            errorMsg = 'Límite de dispositivos alcanzado';
+                            break;
+                        case 'server_error':
+                            errorMsg = 'Error del servidor. Intenta más tarde';
+                            break;
+                    }
+                    
+                    showError(errorMsg);
+                }
+            } catch (err) {
+                showError('Error de conexión. Verifica tu internet.');
+                console.error('Error:', err);
+            } finally {
+                loginBtn.disabled = false;
+                loading.style.display = 'none';
+            }
+        }
+        
+        function redirectToApp() {
+            // Verificar si hay notificación sin leer
+            const hasUnreadNotif = localStorage.getItem('xuper_notif_unread');
+            if (hasUnreadNotif === 'true') {
+                const title = localStorage.getItem('xuper_notif_title') || '';
+                const message = localStorage.getItem('xuper_notif_message') || '';
+                
+                if (title || message) {
+                    document.querySelector('.login-container').innerHTML = `
+                        <div class="logo">📢</div>
+                        <h1 style="color: #667eea;">${title}</h1>
+                        <p style="margin: 20px 0;">${message}</p>
+                        <button class="btn" onclick="closeNotification()">Continuar</button>
+                    `;
+                    localStorage.setItem('xuper_notif_unread', 'false');
+                    return;
+                }
+            }
+            
+            // Intentar cerrar el WebView de varias formas
+            try {
+                window.close();
+            } catch(e) {}
+            
+            try {
+                window.location.href = 'about:blank';
+            } catch(e) {}
+            
+            try {
+                window.location.href = 'xuperhydra://main';
+            } catch(e) {}
+            
+            // Si hay interfaz Android, usarla
+            if (window.Android && window.Android.closeWebView) {
+                window.Android.closeWebView();
+            }
+        }
+        
+        function closeNotification() {
+            redirectToApp();
+        }
+        
+        function showError(message) {
+            error.textContent = message;
+            error.style.display = 'block';
+            codeInput.value = '';
+            codeInput.focus();
+        }
+        
+        // Limpiar sesión si el usuario mantiene presionado el logo por 3 segundos
+        let pressTimer;
+        document.querySelector('.logo').addEventListener('touchstart', function() {
+            pressTimer = setTimeout(function() {
+                if (confirm('¿Deseas cerrar sesión?')) {
+                    localStorage.clear();
+                    location.reload();
+                }
+            }, 3000);
+        });
+        
+        document.querySelector('.logo').addEventListener('touchend', function() {
+            clearTimeout(pressTimer);
+        });
+        
+        // También funciona con click en navegadores de escritorio
+        document.querySelector('.logo').addEventListener('mousedown', function() {
+            pressTimer = setTimeout(function() {
+                if (confirm('¿Deseas cerrar sesión?')) {
+                    localStorage.clear();
+                    location.reload();
+                }
+            }, 3000);
+        });
+        
+        document.querySelector('.logo').addEventListener('mouseup', function() {
+            clearTimeout(pressTimer);
+        });
+    </script>
+</body>
+</html>
